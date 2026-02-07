@@ -1,0 +1,50 @@
+syntax = "proto3";
+package orders;
+
+service OrderBook{
+    rpc NewOrder (NewOrderRequest) returns (NewOrderResponse);
+    rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse);
+    rpc ModifyOrder (ModifyOrderRequest) returns (ModifyOrderResponse);
+}
+
+message ModifyOrderRequest{
+    string user_id = 1;
+    string engine_order_id = 2;
+    uint32 new_price = 3;
+    uint32 new_quantity = 4;
+    bool side = 5;
+}
+
+message ModifyOrderResponse{
+    uint32 status = 1;
+    optional string cause = 2;
+}
+
+message NewOrderRequest{
+    string user_id = 1;
+    optional uint32 price = 2;
+    uint32 quantity = 3;
+    bool is_buy_side = 4;
+    string security_id = 5;
+    OrderType order_type = 6;
+}
+
+message NewOrderResponse{
+    uint32 status = 1;
+    optional string cause = 2;
+}
+
+enum OrderType{
+    MARKET = 0;
+    LIMIT = 1;
+}
+
+message CancelOrderRequest{
+    string user_id = 1;
+    string engine_order_id = 2;
+}
+
+message CancelOrderResponse{
+    uint32 status = 1;
+    optional string cause = 2;
+}
