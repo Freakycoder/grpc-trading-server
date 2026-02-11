@@ -5,6 +5,7 @@ service OrderBook{
     rpc NewOrder (NewOrderRequest) returns (NewOrderResponse);
     rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse);
     rpc ModifyOrder (ModifyOrderRequest) returns (ModifyOrderResponse);
+    rpc BookDepth (BookRequest) returns (BookResponse);
 }
 
 message ModifyOrderRequest{
@@ -21,17 +22,18 @@ message ModifyOrderResponse{
 }
 
 message NewOrderRequest{
-    string user_id = 1;
+    optional string user_id = 1;
     optional uint32 price = 2;
     uint32 quantity = 3;
     bool is_buy_side = 4;
-    string security_id = 5;
+    optional string security_id = 5;
     OrderType order_type = 6;
 }
 
 message NewOrderResponse{
-    uint32 status = 1;
-    optional string cause = 2;
+    string order_id = 1;
+    uint32 status = 2;
+    optional string cause = 3;
 }
 
 enum OrderType{
@@ -47,4 +49,24 @@ message CancelOrderRequest{
 message CancelOrderResponse{
     uint32 status = 1;
     optional string cause = 2;
+}
+
+message BookRequest{
+    string security_id = 1;
+    optional uint32 level_count = 2;
+}
+
+message BookResponse{
+    uint32 status = 1;
+    optional BookDepth book_depth = 2;
+}
+
+message PriceLevelDepth{
+    uint32 price = 1;
+    uint32 quantity = 2;
+}
+
+message BookDepth{
+    repeated PriceLevelDepth bid_depth = 1;
+    repeated PriceLevelDepth ask_depth = 2;
 }
