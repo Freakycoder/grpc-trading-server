@@ -19,7 +19,4 @@ orderbook-proto = "0.1.3"
 [build-dependencies]
 tonic-prost-build = "0.14.3"
 
-[[bin]]
-name = "user"
-path = "src/client.rs"
 
