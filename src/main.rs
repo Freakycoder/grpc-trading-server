@@ -170,7 +170,7 @@ impl OrderBook for TradingServer {
         else {
             Ok(Response::new(CancelOrderResponse {
             order_id : order_id.to_string(),
-            status: 200,
+            status: 400,
             cause: Some("order doesn't exist in server order registry".to_owned()),
         }))
         }
