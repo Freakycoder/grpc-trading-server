@@ -87,7 +87,7 @@ impl OrderBook for TradingServer {
                 current_quantity: order_data.quantity,
                 is_buy_side: order_data.is_buy_side,
                 security_id,
-                order_type: OrderType::Limit,
+                order_type: if order_data.order_type == 0 { OrderType::Market(if order_data.price.is_some() { order_data.price} else {None})} else {OrderType::Limit},
             },
             &match_span,
         );
