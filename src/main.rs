@@ -211,7 +211,7 @@ impl OrderBook for TradingServer {
                 Err(e) => {
                     Ok(Response::new(ModifyOrderResponse {
                         order_id : order_id.to_string(),
-                        status: 200,
+                        status: 400,
                         output : Some(e.to_string())
                 }))
                 }
