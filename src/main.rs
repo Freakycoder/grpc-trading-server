@@ -73,55 +73,61 @@ impl OrderBook for TradingServer {
             Empty
         );
 
-        let engine = self.engine.lock();
+        match self.order_registry.lock(){
+            Ok(mut registry_gaurd) => {
 
-        match engine{
-            Ok(mut engine_lock) => {
-
-                let match_response = engine_lock.match_order(
-                    NewOrder {
-                        engine_order_id: order_id,
-                        price: order_data.price,
-                        initial_quantity: order_data.quantity,
-                        current_quantity: order_data.quantity,
-                        is_buy_side: order_data.is_buy_side,
-                        security_id,
-                        order_type: if order_data.order_type == 0 { OrderType::Market(if order_data.price.is_some() { order_data.price} else {None})} else {OrderType::Limit},
-                    },
-                    &match_span,
-                );
-                match match_response{
-                    Ok(res) => {
-                        match res {
-                            Some(index) => {
-                                let mut gaurd = self.order_registry.lock().map_err(|_| Status::internal("failed to get lock"))?;
-                                gaurd.insert(order_id, index);
-                                Ok(Response::new(NewOrderResponse{
-                                      order_id : order_id.to_string(),
-                                      status : 200,
-                                      order_index : Some(index as u32),
-                                      cause : None
-                                }))
-                              },
-                              None => {
-                                Ok(Response::new(NewOrderResponse {
-                                      order_id: order_id.to_string(),
-                                      status: 200,
-                                      order_index : None,
-                                      cause : None
-                                }))
+                match self.engine.lock(){
+                    Ok(mut engine_lock) => {
+        
+                        let match_response = engine_lock.match_order(
+                            NewOrder {
+                                engine_order_id: order_id,
+                                price: order_data.price,
+                                initial_quantity: order_data.quantity,
+                                current_quantity: order_data.quantity,
+                                is_buy_side: order_data.is_buy_side,
+                                security_id,
+                                order_type: if order_data.order_type == 0 { OrderType::Market(if order_data.price.is_some() { order_data.price} else {None})} else {OrderType::Limit},
+                            },
+                            &match_span,
+                        );
+                        match match_response{
+                            Ok(res) => {
+                                match res {
+                                    Some(index) => {
+                                        registry_gaurd.insert(order_id, index);
+                                        Ok(Response::new(NewOrderResponse{
+                                              order_id : order_id.to_string(),
+                                              status : 200,
+                                              order_index : Some(index as u32),
+                                              cause : None
+                                        }))
+                                      },
+                                      None => {
+                                        Ok(Response::new(NewOrderResponse {
+                                              order_id: order_id.to_string(),
+                                              status: 200,
+                                              order_index : None,
+                                              cause : None
+                                        }))
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                Err(Status::internal(format!("error occured in matching due to {}",e)))
                             }
                         }
-                    },
+                    }
                     Err(e) => {
-                        Err(Status::internal(format!("error occured in matching due to {}",e)))
+                        Err(Status::internal(format!("new order engine mutex poisened due to {}",e)))
                     }
                 }
             }
             Err(e) => {
-                Err(Status::internal(format!("engine mutex poisened due to {}",e)))
+                Err(Status::internal(format!("order registry mutex poisened due to {}",e)))
             }
         }
+        
         
 
     }
@@ -136,43 +142,50 @@ impl OrderBook for TradingServer {
            false,
            ""
         );
-        let order_gaurd = self.order_registry.lock().map_err(|_| Status::internal("failed to get order registry gaurd"))?;
-        if let Some(_) = order_gaurd.get_key_value(&order_id){
-            match self.engine.lock(){
-                Ok(mut engine_gaurd) => {
-
-                    let cancel_response = engine_gaurd.cancel(order_id, &cancel_span);
-                    match cancel_response {
-                        Ok(outcome) => {
-                            match outcome{
-                                CancelOutcome::Success => {
-                                    Ok(Response::new(CancelOrderResponse {
-                                        order_id : order_id.to_string(),
-                                        status: 200,
-                                        cause: Some("cancellation succesfull".to_owned()),
-                                    }))
+        match self.order_registry.lock(){
+            Ok(order_gaurd) => {
+                if let Some(_) = order_gaurd.get_key_value(&order_id){
+                    match self.engine.lock(){
+                        Ok(mut engine_gaurd) => {
+        
+                            let cancel_response = engine_gaurd.cancel(order_id, &cancel_span);
+                            match cancel_response {
+                                Ok(outcome) => {
+                                    match outcome{
+                                        CancelOutcome::Success => {
+                                            Ok(Response::new(CancelOrderResponse {
+                                                order_id : order_id.to_string(),
+                                                status: 200,
+                                                cause: Some("cancellation succesfull".to_owned()),
+                                            }))
+                                        }
+                                        CancelOutcome::Failed => {
+                                            Ok(Response::new(CancelOrderResponse {
+                                                order_id : order_id.to_string(),
+                                                status: 400,
+                                                cause: Some("cancellation failed".to_owned()),
+                                            }))
+                                        }
+                                    }
                                 }
-                                CancelOutcome::Failed => {
-                                    Ok(Response::new(CancelOrderResponse {
-                                        order_id : order_id.to_string(),
-                                        status: 400,
-                                        cause: Some("cancellation failed".to_owned()),
-                                    }))
+                                Err(e) => {
+                                    Err(Status::internal(format!("error occured due to {}",e)))
                                 }
                             }
                         }
                         Err(e) => {
-                            Err(Status::internal(format!("error occured due to {}",e)))
+                            Err(Status::internal(format!("cancel engine mutex poisened due to {}",e)))
                         }
                     }
                 }
-                Err(e) => {
-                    Err(Status::internal(format!("engine mutex poisened due to {}",e)))
+                else {
+                    Err(Status::internal("order doesn't exist in server order registry"))
                 }
+
             }
-        }
-        else {
-            Err(Status::internal("order doesn't exist in server order registry"))
+            Err(e) => {
+                Err(Status::internal(format!("{}",e)))
+            }
         }
     }
     async fn modify_order(
@@ -196,32 +209,39 @@ impl OrderBook for TradingServer {
             0, 
             0
         );
-        let order_gaurd = self.order_registry.lock().map_err(|_| Status::internal("failed to get order registry gaurd"))?;
-        if let Some(_) = order_gaurd.get_key_value(&order_id){
-            match self.engine.lock(){
-                Ok(mut engine_gaurd) => {
-                    let modify_result = engine_gaurd.modify(order_id, modify_data.new_price, modify_data.new_quantity, &modify_span);
-                    match modify_result {
-                        Ok(outcome) => {
-                            Ok(Response::new(ModifyOrderResponse {
-                                order_id : order_id.to_string(),
-                                status: 200,
-                                output : Some(outcome.to_string())
-                        }))
-                        }
+        match self.order_registry.lock(){
+            Ok(order_gaurd) => {
+
+                if let Some(_) = order_gaurd.get_key_value(&order_id){
+                    match self.engine.lock(){
+                        Ok(mut engine_gaurd) => {
+                            let modify_result = engine_gaurd.modify(order_id, modify_data.new_price, modify_data.new_quantity, &modify_span);
+                            match modify_result {
+                                Ok(outcome) => {
+                                    Ok(Response::new(ModifyOrderResponse {
+                                        order_id : order_id.to_string(),
+                                        status: 200,
+                                        output : Some(outcome.to_string())
+                                }))
+                                },
+                                Err(e) => {
+                                    Err(Status::internal(format!("{}",e)))
+                                }
+                            }
+        
+                        },
                         Err(e) => {
-                            Err(Status::internal(format!("{}",e)))
+                            Err(Status::internal(format!("modify engine mutex poisened due to {}",e)))
                         }
                     }
-
-                },
-                Err(e) => {
-                    Err(Status::internal(format!("engine mutex poisened due to {}",e)))
+                }
+                else {
+                    Err(Status::internal("order doesn't exist in server order registry"))
                 }
             }
-        }
-        else {
-            Err(Status::internal("order doesn't exist in server order registry"))
+            Err(e) => {
+                Err(Status::internal(format!("{}",e)))
+            }
         }
 
     }
